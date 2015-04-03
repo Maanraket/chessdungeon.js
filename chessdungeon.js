@@ -1,23 +1,53 @@
-var c = document.getElementById('canvas');
-var ctx = c.getContext('2d');
+var _width = 300,
+	_height = 300;
+
+var stage = new PIXI.Stage(0xBADA55);
+var renderer = new PIXI.autoDetectRenderer(_width,_height);
+var canvas = document.body.appendChild(renderer.view);
+	requestAnimFrame(animate);
 
 var board = {
 	gridsize: 8,
-	intialize: function(){
-		rectwidth = ctx.canvas.width/this.gridsize;
-		rectheight = ctx.canvas.height/this.gridsize;
-		rectcolor = false;
+	margin: 20,
+	rectsize: null,
+	boardloc: { x: null, y: null},
+	initialize: function(){
+		var graphics = new PIXI.Graphics();
+		var rectcolor = false;
+		var boardloc, rectsize;
+		if(_width>_height){
+			boardloc = {
+				x: (_width/2)-((_height-this.margin*2)/2),
+				y: this.margin
+			};
+			rectsize = (_height-this.margin*2)/this.gridsize;
+		} else {
+			boardloc = {
+				x: this.margin,
+				y: (_height/2)-((_width-this.margin*2)/2)
+			};
+			rectsize = (_width-this.margin*2)/this.gridsize;
+		};
 		for(var i=0;i<this.gridsize;i++){
 			if(this.gridsize % 2 === 0) rectcolor=!rectcolor;
 			for(var j=0;j<this.gridsize;j++){
-				if(rectcolor)
-					ctx.fillStyle='black';
-				else
-					ctx.fillStyle='white';
-				ctx.fillRect(i*rectwidth,j*rectheight,rectwidth,rectheight);
+				var squareColor;
+				if(rectcolor){
+					squareColor = 0x000000;
+				} else {
+					squareColor = 0xFFFFFF;
+				}
+				graphics.beginFill(squareColor);
+				graphics.drawRect(boardloc.x+(i*rectsize),boardloc.y+(j*rectsize),rectsize,rectsize);
+				graphics.endFill();
 				rectcolor=!rectcolor;
 			}
 		}
+		this.rectsize = rectsize;
+		this.boardloc.x = boardloc.x;
+		this.boardloc.y = boardloc.y;
+		stage.addChild(graphics);
+		renderer.render(stage);
 	}
 }
 
@@ -34,8 +64,7 @@ var character = {
 			while(x+dx>=0&&x+dx<board.gridsize&&y+dy>=0&&y+dy<board.gridsize){
 				x += dx;
 				y += dy;
-				move = [x, y];
-				curmoves.push(move);
+				curmoves.push([x, y]);
 				if(explore.single){break}
 			}
 		}
@@ -60,30 +89,119 @@ var character = {
 		this.moves = curmoves;
 	},
 	draw: function(){
-		rectwidth = ctx.canvas.width/board.gridsize;
-		rectheight = ctx.canvas.height/board.gridsize;
-		ctx.fillStyle='blue';
+		var moveGraphics = new PIXI.Graphics();
+		var rectsize = board.rectsize;
+		moveGraphics.beginFill(0x1919ff);
 		for(var i = 0; i < this.moves.length; i++){
 			sx=this.moves[i][0];
 			sy=this.moves[i][1];
 			//draw that shit!
-			ctx.beginPath();
-			ctx.arc(sx*rectwidth+rectwidth/2,sy*rectheight+rectheight/2,rectheight/4,0,2*Math.PI);
-			ctx.fill();
-
+			moveGraphics.drawCircle(board.boardloc.x+sx*rectsize-rectsize/2,board.boardloc.y+sy*rectsize-rectsize/2,rectsize/4);
 		}
+		moveGraphics.endFill;
+		stage.addChild(moveGraphics);
+
+		//load textures
+		bodyImg = PIXI.Texture.fromImage("img/gary_body.png");
+		headImg = PIXI.Texture.fromImage("img/gary_head.png");
+		body =  new PIXI.Sprite(bodyImg);
+		head =  new PIXI.Sprite(headImg);
+
+		body.scale.x = rectsize*0.01;
+		body.scale.y = rectsize*0.01;
+		body.position.x = (this.pos.x-1)*rectsize+board.boardloc.x;
+		body.position.y = (this.pos.y-1)*rectsize+board.boardloc.y;
+
+		head.position.x = (this.pos.x-1)*rectsize+board.boardloc.x+rectsize*0.45;
+		head.position.y = (this.pos.y-1)*rectsize+board.boardloc.y+rectsize*0.08;
+
+		stage.addChild(body);
+
+		var x = head.position.x;
+		var y = head.position.y;
+
+		// enable the head to be interactive.. this will allow it to respond to mouse and touch events		
+		head.interactive = true;
+		// this button mode will mean the hand cursor appears when you rollover the head with your mouse
+		head.buttonMode = true;
+		
+		// center the heads anchor point
+		head.anchor.x = 0.5;
+		head.anchor.y = 0.5;
+		// make it a bit bigger, so its easier to touch
+		head.scale.x = rectsize*0.01;
+		head.scale.y = rectsize*0.01;
+		
+		// use the mousedown and touchstart
+		head.mousedown = head.touchstart = function(data){
+			// store a refference to the data
+			// The reason for this is because of multitouch
+			// we want to track the movement of this particular touch
+			this.data = data;
+			this.scale.x = rectsize*0.012;
+			this.scale.y = rectsize*0.012;
+			this.dragging = true;
+            this.sx = this.data.getLocalPosition(head).x * head.scale.x;
+            this.sy = this.data.getLocalPosition(head).y * head.scale.y;		
+        };
+		
+		// set the events for when the mouse is released or a touch is released
+		head.mouseup = head.mouseupoutside = head.touchend = head.touchendoutside = function(data)
+		{
+			this.scale.x = rectsize*0.01;
+			this.scale.y = rectsize*0.01;
+			this.dragging = false;
+			// set the interaction data to null
+			this.data = null;
+		};
+		
+		// set the callbacks for when the mouse or a touch moves
+		head.mousemove = head.touchmove = function(data){
+			if(this.dragging){
+				// need to get parent coords..
+				var newPosition = this.data.getLocalPosition(this.parent);
+                this.position.x = newPosition.x - this.sx;
+                this.position.y = newPosition.y - this.sy;
+            }
+		}
+		
+		// move the sprite to its designated position
+		head.position.x = x;
+		head.position.y = y;
+		
+		// add it to the stage
+		stage.addChild(head);
+		renderer.render(stage);
 	}
 }
 
 setPiece = function(piece,posx,posy){
-	board.intialize();
 	character.piece = piece;
 	character.pos = {x:posx, y:posy};
 	character.findMoves();
 	character.draw();
 }
 
-setPiece('knight',3,3);
+var resizeHandler = function(event){
+	var w = window,
+	d = document,
+	e = d.documentElement,
+	g = d.getElementsByTagName('body')[0],
+	x = w.innerWidth || e.clientWidth || g.clientWidth,
+	y = w.innerHeight|| e.clientHeight|| g.clientHeight;
 
+	_width = x;
+	_height = y;
+	renderer.resize(x,y);
+	board.initialize();
+	setPiece('knight',3,3);
+};
 
+function animate() {
+    requestAnimFrame(animate);
+    // render the stage   
+    renderer.render(stage);
+}
 
+window.onresize = resizeHandler;
+window.onload = resizeHandler;
