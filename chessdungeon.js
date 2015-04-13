@@ -96,10 +96,23 @@ var character = {
 			sx=this.moves[i][0];
 			sy=this.moves[i][1];
 			//draw that shit!
-			moveGraphics.drawCircle(board.boardloc.x+sx*rectsize-rectsize/2,board.boardloc.y+sy*rectsize-rectsize/2,rectsize/4);
+			moveGraphics.drawCircle(board.boardloc.x+sx*rectsize+rectsize/2,board.boardloc.y+sy*rectsize+rectsize/2,rectsize/4);
 		}
 		moveGraphics.endFill;
 		stage.addChild(moveGraphics);
+
+		//mouse stuff
+		var mousePos = {
+			current: {x: null, y: null},
+			old: {x: null, y: null} 
+		}
+
+		var getMouse = function(){
+			return {
+				x: stage.getMousePosition().x,
+				y: stage.getMousePosition().y
+			};
+		}
 
 		//load textures
 		bodyImg = PIXI.Texture.fromImage("img/gary_body.png");
@@ -109,13 +122,16 @@ var character = {
 
 		body.scale.x = rectsize*0.01;
 		body.scale.y = rectsize*0.01;
-		body.position.x = (this.pos.x-1)*rectsize+board.boardloc.x;
-		body.position.y = (this.pos.y-1)*rectsize+board.boardloc.y;
+		body.position.x = (this.pos.x)*rectsize+board.boardloc.x;
+		body.position.y = (this.pos.y)*rectsize+board.boardloc.y;
 
-		head.position.x = (this.pos.x-1)*rectsize+board.boardloc.x+rectsize*0.45;
-		head.position.y = (this.pos.y-1)*rectsize+board.boardloc.y+rectsize*0.08;
+		head.scale.x = rectsize*0.01;
+		head.scale.y = rectsize*0.01;
+		head.position.x = (this.pos.x)*rectsize+board.boardloc.x+rectsize*0.45;
+		head.position.y = (this.pos.y)*rectsize+board.boardloc.y+rectsize*0.08;
 
 		stage.addChild(body);
+		stage.addChild(head);
 
 		var x = head.position.x;
 		var y = head.position.y;
@@ -128,13 +144,10 @@ var character = {
 		// center the heads anchor point
 		head.anchor.x = 0.5;
 		head.anchor.y = 0.5;
-		// make it a bit bigger, so its easier to touch
-		head.scale.x = rectsize*0.01;
-		head.scale.y = rectsize*0.01;
 		
 		// use the mousedown and touchstart
 		head.mousedown = head.touchstart = function(data){
-			// store a refference to the data
+			// store a reference to the data
 			// The reason for this is because of multitouch
 			// we want to track the movement of this particular touch
 			this.data = data;
@@ -142,19 +155,22 @@ var character = {
 			this.scale.y = rectsize*0.012;
 			this.dragging = true;
             this.sx = this.data.getLocalPosition(head).x * head.scale.x;
-            this.sy = this.data.getLocalPosition(head).y * head.scale.y;		
+            this.sy = this.data.getLocalPosition(head).y * head.scale.y;
+ 			mousePos.current = getMouse();
+            mousePos.old = mousePos.current;
         };
-		
+
 		// set the events for when the mouse is released or a touch is released
 		head.mouseup = head.mouseupoutside = head.touchend = head.touchendoutside = function(data)
 		{
 			this.scale.x = rectsize*0.01;
 			this.scale.y = rectsize*0.01;
+			this.rotation = 0;
 			this.dragging = false;
 			// set the interaction data to null
 			this.data = null;
 		};
-		
+
 		// set the callbacks for when the mouse or a touch moves
 		head.mousemove = head.touchmove = function(data){
 			if(this.dragging){
@@ -162,6 +178,16 @@ var character = {
 				var newPosition = this.data.getLocalPosition(this.parent);
                 this.position.x = newPosition.x - this.sx;
                 this.position.y = newPosition.y - this.sy;
+                mousePos.current = getMouse();
+            	console.log("mousevector.x = " + (mousePos.current.x - mousePos.old.x));
+            	//do stuff with the mouse
+            	if(mousePos.current.x - mousePos.old.x < 0)
+            		head.rotation = -Math.PI/4;
+            	else if (mousePos.current.x - mousePos.old.x === 0)
+            		head.rotation = 0;
+            	else
+            		head.rotation = Math.PI/4;
+                mousePos.old = mousePos.current;
             }
 		}
 		
@@ -170,8 +196,7 @@ var character = {
 		head.position.y = y;
 		
 		// add it to the stage
-		stage.addChild(head);
-		renderer.render(stage);
+		requestAnimFrame(animate);
 	}
 }
 
